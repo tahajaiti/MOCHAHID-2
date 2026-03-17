@@ -1,0 +1,7 @@
+export { Home } from './Home'
+export { Browse } from './Browse'
+export { Login } from './Login'
+export { Register } from './Register'
+export { VideoDetails } from './VideoDetails'
+export { Watchlist } from './Watchlist'
+export { Profile } from './Profile'
