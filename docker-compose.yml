@@ -1,0 +1,165 @@
+services:
+
+  video-db:
+    image: postgres:17-alpine
+    container_name: mochahid-video-db
+    environment:
+      POSTGRES_DB: ${VIDEO_DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - video-db-data:/var/lib/postgresql/data
+    networks:
+      - mochahid-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${VIDEO_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-db:
+    image: postgres:17-alpine
+    container_name: mochahid-user-db
+    environment:
+      POSTGRES_DB: ${USER_DB_NAME}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5433:5432"
+    volumes:
+      - user-db-data:/var/lib/postgresql/data
+    networks:
+      - mochahid-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${USER_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  discovery-service:
+    build:
+      context: ./backend
+      dockerfile: discovery-service/Dockerfile
+    container_name: mochahid-discovery
+    ports:
+      - "8761:8761"
+    networks:
+      - mochahid-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8761/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  config-service:
+    build:
+      context: ./backend
+      dockerfile: config-service/Dockerfile
+    container_name: mochahid-config
+    ports:
+      - "8888:8888"
+    environment:
+      EUREKA_URI: ${EUREKA_URI}
+      CONFIG_REPO_URI: file:///config-repo
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+    networks:
+      - mochahid-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8888/actuator/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  gateway-service:
+    build:
+      context: ./backend
+      dockerfile: gateway-service/Dockerfile
+    container_name: mochahid-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_URI: ${EUREKA_URI}
+      CONFIG_URI: ${CONFIG_URI}
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-service:
+        condition: service_healthy
+    networks:
+      - mochahid-net
+
+  video-service:
+    build:
+      context: ./backend
+      dockerfile: video-service/Dockerfile
+    container_name: mochahid-video-service
+    ports:
+      - "8081:8081"
+    environment:
+      EUREKA_URI: ${EUREKA_URI}
+      CONFIG_URI: ${CONFIG_URI}
+      DB_HOST: video-db
+      DB_PORT: 5432
+      DB_NAME: ${VIDEO_DB_NAME}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      video-db:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      config-service:
+        condition: service_healthy
+    networks:
+      - mochahid-net
+
+  user-service:
+    build:
+      context: ./backend
+      dockerfile: user-service/Dockerfile
+    container_name: mochahid-user-service
+    ports:
+      - "8082:8082"
+    environment:
+      EUREKA_URI: ${EUREKA_URI}
+      CONFIG_URI: ${CONFIG_URI}
+      DB_HOST: user-db
+      DB_PORT: 5432
+      DB_NAME: ${USER_DB_NAME}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+    depends_on:
+      user-db:
+        condition: service_healthy
+      discovery-service:
+        condition: service_healthy
+      config-service:
+        condition: service_healthy
+    networks:
+      - mochahid-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mochahid-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - gateway-service
+    networks:
+      - mochahid-net
+
+volumes:
+  video-db-data:
+  user-db-data:
+
+networks:
+  mochahid-net:
+    driver: bridge
