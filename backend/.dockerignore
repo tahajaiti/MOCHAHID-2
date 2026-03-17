@@ -1,0 +1,13 @@
+**/build/
+**/.gradle/
+**/bin/
+**/*.class
+**/*.jar
+**/*.war
+**/node_modules/
+**/.idea/
+**/*.iml
+**/.vscode/
+**/.DS_Store
+**/Thumbs.db
+**/*.log
